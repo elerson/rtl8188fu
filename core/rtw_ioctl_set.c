@@ -344,11 +344,13 @@ _func_enter_;
 	} else if (check_fwstate(pmlmepriv, _FW_UNDER_LINKING) == _TRUE) {
 		goto release_mlme_lock;
 	}
-
+	
+	DBG_871X("Set BSSID - 1");
 	if (check_fwstate(pmlmepriv, _FW_LINKED|WIFI_ADHOC_MASTER_STATE) == _TRUE)
 	{
+		DBG_871X("Set BSSID - _FW_LINKED|WIFI_ADHOC_MASTER_STATE");
 		RT_TRACE(_module_rtl871x_ioctl_set_c_, _drv_info_, ("set_bssid: _FW_LINKED||WIFI_ADHOC_MASTER_STATE\n"));
-
+		
 		if (_rtw_memcmp(&pmlmepriv->cur_network.network.MacAddress, bssid, ETH_ALEN) == _TRUE)
 		{		
 			if (check_fwstate(pmlmepriv, WIFI_STATION_STATE) == _FALSE)

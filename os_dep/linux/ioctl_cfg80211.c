@@ -3139,7 +3139,22 @@ static int cfg80211_rtw_join_ibss(struct wiphy *wiphy, struct net_device *ndev,
 	{
 		ret = -1;
 		goto exit;
-	}	
+	}
+	
+	if(params->bssid)
+	{
+		if ( rtw_set_802_11_bssid(padapter, params->bssid) == _FALSE) 
+		{
+			ret = -1;
+			goto exit;
+		}
+	
+	}
+
+	
+	
+	
+		
 	
 exit:
 	return ret;

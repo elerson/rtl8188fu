@@ -549,6 +549,9 @@ void rtw_generate_random_ibss(u8* pibss)
 	pibss[0] = 0x02; /* in ad-hoc mode local bit must set to 1 */
 	pibss[1] = 0x11;
 	pibss[2] = 0x87;
+	pibss[3] = 0x0A;
+	pibss[4] = 0x0B;
+	pibss[5] = 0x0C;
 }
 
 u8 *rtw_get_capability_from_ie(u8 *ie)
