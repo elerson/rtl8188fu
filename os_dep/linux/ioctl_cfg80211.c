@@ -31,11 +31,35 @@
 #endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
-#define STATION_INFO_SIGNAL		BIT(NL80211_STA_INFO_SIGNAL)
+#define STATION_INFO_INACTIVE_TIME	BIT(NL80211_STA_INFO_INACTIVE_TIME)
+#define STATION_INFO_LLID			BIT(NL80211_STA_INFO_LLID)
+#define STATION_INFO_PLID			BIT(NL80211_STA_INFO_PLID)
+#define STATION_INFO_PLINK_STATE	BIT(NL80211_STA_INFO_PLINK_STATE)
+#define STATION_INFO_SIGNAL			BIT(NL80211_STA_INFO_SIGNAL)
 #define STATION_INFO_TX_BITRATE		BIT(NL80211_STA_INFO_TX_BITRATE)
+#define STATION_INFO_TX_BITRATE_BW_5	BIT(RATE_INFO_BW_5)
+#define STATION_INFO_TX_BITRATE_BW_10	BIT(RATE_INFO_BW_10)
+#define STATION_INFO_TX_BITRATE_BW_20	BIT(RATE_INFO_BW_20)
+#define STATION_INFO_TX_BITRATE_BW_40	BIT(RATE_INFO_BW_40)
+#define STATION_INFO_TX_BITRATE_BW_80	BIT(RATE_INFO_BW_80)
+#define STATION_INFO_TX_BITRATE_BW_160	BIT(RATE_INFO_BW_160)
 #define STATION_INFO_RX_PACKETS		BIT(NL80211_STA_INFO_RX_PACKETS)
 #define STATION_INFO_TX_PACKETS		BIT(NL80211_STA_INFO_TX_PACKETS)
+#define STATION_INFO_TX_FAILED		BIT(NL80211_STA_INFO_TX_FAILED)
+#define STATION_INFO_RX_BYTES		BIT(NL80211_STA_INFO_RX_BYTES)
+#define STATION_INFO_TX_BYTES		BIT(NL80211_STA_INFO_TX_BYTES)
+#define STATION_INFO_LOCAL_PM		BIT(NL80211_STA_INFO_LOCAL_PM)
+#define STATION_INFO_PEER_PM		BIT(NL80211_STA_INFO_PEER_PM)
+#define STATION_INFO_NONPEER_PM		BIT(NL80211_STA_INFO_NONPEER_PM)
+#define STATION_INFO_RX_BYTES		BIT(NL80211_STA_INFO_RX_BYTES)
+#define STATION_INFO_TX_BYTES		BIT(NL80211_STA_INFO_TX_BYTES)
 #define STATION_INFO_ASSOC_REQ_IES	0
+#define STATION_INFO_BSS_PARAM			BIT(NL80211_STA_INFO_BSS_PARAM)
+#define STATION_INFO_BSS_PARAM_CTS_PROT		BIT(NL80211_STA_BSS_PARAM_CTS_PROT)
+#define STATION_INFO_BSS_PARAM_SHORT_PREAMBLE	BIT(NL80211_STA_BSS_PARAM_SHORT_PREAMBLE)
+#define STATION_INFO_BSS_PARAM_SHORT_SLOT_TIME	BIT(NL80211_STA_BSS_PARAM_SHORT_SLOT_TIME)
+#define STATION_INFO_BSS_PARAM_DTIM_PERIOD	BIT(NL80211_STA_BSS_PARAM_DTIM_PERIOD)
+#define STATION_INFO_BSS_PARAM_BEACON_INTERVAL	BIT(NL80211_STA_BSS_PARAM_BEACON_INTERVAL)
 #endif /* Linux kernel >= 4.0.0 */
 
 #include <rtw_wifi_regd.h>
@@ -1896,6 +1920,11 @@ static int cfg80211_rtw_get_station(struct wiphy *wiphy,
 		&& check_fwstate(pmlmepriv, _FW_LINKED)
 	)
 	{
+		sinfo->filled |= STATION_INFO_SIGNAL;
+		sinfo->signal = psta->rssi;// translate_percentage_to_dbm();
+		sinfo->filled |= STATION_INFO_INACTIVE_TIME;		
+		sinfo->inactive_time = rtw_get_passing_time_ms(psta->sta_stats.last_rx_time);
+			
 		//TODO: should acquire station info...
 	}
 
@@ -4523,28 +4552,78 @@ static int	cfg80211_rtw_change_station(struct wiphy *wiphy, struct net_device *n
 	return 0;
 }
 
-struct sta_info *rtw_sta_info_get_by_idx(const int idx, struct sta_priv *pstapriv)
-
+struct sta_info *rtw_sta_info_get_by_idx(struct sta_priv *pstapriv, const int idx, u8 *asoc_list_num)
 {
-
 	_list	*phead, *plist;
 	struct sta_info *psta = NULL;
 	int i = 0;
+
 	
 	phead = &pstapriv->asoc_list;
 	plist = get_next(phead);
+	
+	DBG_871X("Station list %d ", rtw_end_of_queue_search(phead, plist));
 
-	//check asoc_queue
-	while ((rtw_end_of_queue_search(phead, plist)) == _FALSE)	
-	{
-		if(idx == i) psta = LIST_CONTAINOR(plist, struct sta_info, asoc_list);
-		plist = get_next(plist);	
+	/* check asoc_queue */
+	while ((rtw_end_of_queue_search(phead, plist)) == _FALSE) {
+		DBG_871X("Station search %d %d", idx, i);
+		if (idx == i)
+			psta = LIST_CONTAINOR(plist, struct sta_info, asoc_list);
+		plist = get_next(plist);
 		i++;
 	}
+
+	if (asoc_list_num)
+		*asoc_list_num = i;
+
 	return psta;
 }
-
 static int	cfg80211_rtw_dump_station(struct wiphy *wiphy, struct net_device *ndev,
+		int idx, u8 *mac, struct station_info *sinfo)
+{
+#define DBG_DUMP_STATION 0
+
+	int ret = 0;
+	_irqL irqL;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(ndev);
+	struct sta_priv *pstapriv = &padapter->stapriv;
+	struct sta_info *psta = NULL;
+
+	u8 asoc_list_num;
+
+	if (DBG_DUMP_STATION)
+		RTW_INFO(FUNC_NDEV_FMT"\n", FUNC_NDEV_ARG(ndev));
+
+	_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	psta = rtw_sta_info_get_by_idx(pstapriv, idx, &asoc_list_num);
+	_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+
+
+
+	if (psta){
+		DBG_871X("Station found\n");
+		_rtw_memcpy(mac, psta->hwaddr, ETH_ALEN);
+	}else{
+		DBG_871X("Station not found\n");
+		ret = -ENOENT;
+		goto exit;
+	}
+
+	sinfo->filled = 0;
+
+	if (psta) {
+		sinfo->filled |= STATION_INFO_SIGNAL;
+		sinfo->signal = psta->rssi; //translate_percentage_to_dbm();
+		sinfo->filled |= STATION_INFO_INACTIVE_TIME;
+		sinfo->inactive_time = rtw_get_passing_time_ms(psta->sta_stats.last_rx_time);
+	}
+
+
+exit:
+	return ret;
+}
+
+static int	cfg80211_rtw_dump_station_old(struct wiphy *wiphy, struct net_device *ndev,
 			       int idx, u8 *mac, struct station_info *sinfo)
 {
 
@@ -4554,9 +4633,10 @@ static int	cfg80211_rtw_dump_station(struct wiphy *wiphy, struct net_device *nde
 	struct sta_info *psta = NULL;
 	struct sta_priv *pstapriv = &padapter->stapriv;
 	DBG_871X(FUNC_NDEV_FMT"\n", FUNC_NDEV_ARG(ndev));
-
+	u8 asoc_list_num;
 	_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
-	psta = rtw_sta_info_get_by_idx(idx, pstapriv);
+	
+	psta = rtw_sta_info_get_by_idx(idx, pstapriv, asoc_list_num);
 	_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
 	if(NULL == psta)
 	{
@@ -4566,8 +4646,13 @@ static int	cfg80211_rtw_dump_station(struct wiphy *wiphy, struct net_device *nde
 	}
 	_rtw_memcpy(mac, psta->hwaddr, ETH_ALEN);
 	sinfo->filled = 0;
-	sinfo->filled |= STATION_INFO_SIGNAL;
-	sinfo->signal = psta->rssi;
+	
+	if (psta) {
+		sinfo->filled |= STATION_INFO_SIGNAL;
+		sinfo->signal = psta->rssi;
+		sinfo->filled |= STATION_INFO_INACTIVE_TIME;		
+		sinfo->inactive_time = rtw_get_passing_time_ms(psta->sta_stats.last_rx_time);
+	}
 	
 exit:
 	return ret;

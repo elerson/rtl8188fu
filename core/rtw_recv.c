@@ -1147,6 +1147,7 @@ void count_rx_stats(_adapter *padapter, union recv_frame *prframe, struct sta_in
 		pstats->rx_data_pkts++;
 		pstats->rx_bytes += sz;
 		
+		pstats->last_rx_time = rtw_get_current_time();
 		/*record rx packets for every tid*/	
 		pstats->rx_data_qos_pkts[pattrib->priority]++;
 

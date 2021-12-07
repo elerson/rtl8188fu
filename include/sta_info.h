@@ -74,7 +74,7 @@ typedef struct _RSSI_STA{
 }RSSI_STA, *PRSSI_STA;
 
 struct	stainfo_stats	{
-
+	u32 last_rx_time;
 	u64 rx_mgnt_pkts;
 		u64 rx_beacon_pkts;
 		u64 rx_probereq_pkts;
@@ -172,7 +172,7 @@ struct TDLS_PeerKey {
 #endif //CONFIG_TDLS
 
 struct sta_info {
-
+	
 	_lock	lock;
 	_list	list; //free_sta_queue
 	_list	hash_list; //sta_hash
