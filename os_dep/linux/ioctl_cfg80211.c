@@ -36,6 +36,7 @@
 #define STATION_INFO_PLID			BIT(NL80211_STA_INFO_PLID)
 #define STATION_INFO_PLINK_STATE	BIT(NL80211_STA_INFO_PLINK_STATE)
 #define STATION_INFO_SIGNAL			BIT(NL80211_STA_INFO_SIGNAL)
+#define STATION_INFO_SIGNAL_AVG               BIT(NL80211_STA_INFO_SIGNAL_AVG)
 #define STATION_INFO_TX_BITRATE		BIT(NL80211_STA_INFO_TX_BITRATE)
 #define STATION_INFO_TX_BITRATE_BW_5	BIT(RATE_INFO_BW_5)
 #define STATION_INFO_TX_BITRATE_BW_10	BIT(RATE_INFO_BW_10)
@@ -1878,7 +1879,15 @@ static int cfg80211_rtw_get_station(struct wiphy *wiphy,
 	psta = rtw_get_stainfo(pstapriv, (u8 *)mac);
 	if (psta == NULL) {
 		DBG_8192C("%s, sta_info is null\n", __func__);
-		ret = -ENOENT;
+		ret = 0; //-ENOENT;
+		
+		sinfo->filled |= STATION_INFO_SIGNAL;
+		sinfo->signal = -1000;// translate_percentage_to_dbm();
+		sinfo->filled |= STATION_INFO_SIGNAL_AVG;
+		sinfo->signal_avg = -1000;// translate_percentage_to_dbm();
+		sinfo->filled |= STATION_INFO_INACTIVE_TIME;		
+		sinfo->inactive_time = rtw_get_passing_time_ms(100000);
+		
 		goto exit;
 	}
 
@@ -1922,6 +1931,8 @@ static int cfg80211_rtw_get_station(struct wiphy *wiphy,
 	{
 		sinfo->filled |= STATION_INFO_SIGNAL;
 		sinfo->signal = psta->rssi;// translate_percentage_to_dbm();
+		sinfo->filled |= STATION_INFO_SIGNAL_AVG;
+		sinfo->signal_avg = psta->rssi;// translate_percentage_to_dbm();
 		sinfo->filled |= STATION_INFO_INACTIVE_TIME;		
 		sinfo->inactive_time = rtw_get_passing_time_ms(psta->sta_stats.last_rx_time);
 			
